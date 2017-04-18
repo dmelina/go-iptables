@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -52,6 +53,10 @@ type IPTables struct {
 	proto    Protocol
 	hasCheck bool
 	hasWait  bool
+}
+
+type Rule struct {
+	Target string
 }
 
 // New creates a new IPTables.
@@ -150,6 +155,7 @@ func (ipt *IPTables) ListChains(table string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("%#v\n", result)
 
 	// Iterate over rules to find all default (-P) and user-specified (-N) chains.
 	// Chains definition always come before rules.
@@ -165,6 +171,25 @@ func (ipt *IPTables) ListChains(table string) ([]string, error) {
 		}
 	}
 	return chains, nil
+}
+
+// GetRules returns rules from given IP destination
+func (ipt *IPTables) GetRulesFromDestination(table string, dst *net.IPNet) ([]*Rule, error) {
+	args := []string{"-t", table, "-S"}
+
+	result, err := ipt.executeList(args)
+	if err != nil {
+		return nil, err
+	}
+
+	var rules []*Rule
+	for _, val := range result {
+		if strings.Contains(val, fmt.Sprintf("-d %s", fmt.Sprintf("%s", dst))) {
+			raw := strings.Fields(val)
+			rules = append(rules, &Rule{Target: raw[len(raw)-1]})
+		}
+	}
+	return rules, nil
 }
 
 func (ipt *IPTables) executeList(args []string) ([]string, error) {
